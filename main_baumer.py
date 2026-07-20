@@ -28,6 +28,7 @@ exercised end to end.
 from __future__ import annotations
 
 import queue
+import logging
 import threading
 import tkinter as tk
 from dataclasses import dataclass
@@ -357,6 +358,9 @@ class BaumerConfigApp(tk.Tk):
         self.geometry("700x840")
         self.minsize(620, 760)
 
+        # application menu
+        self._build_menu()
+
         self.ui = UiState()
         self.client: Optional[CanopenClient] = None
         self._events: "queue.Queue[tuple]" = queue.Queue()
@@ -383,6 +387,112 @@ class BaumerConfigApp(tk.Tk):
         self._build_progress(content)
         self._build_sensor_image(content)
         self._build_stats(content)
+
+    def _build_menu(self):
+        menubar = tk.Menu(self)
+        aide_menu = tk.Menu(menubar, tearoff=0)
+        aide_menu.add_command(label="About", command=self._show_about)
+        menubar.add_cascade(label="Aide", menu=aide_menu)
+        # Outils -> Logger
+        outils_menu = tk.Menu(menubar, tearoff=0)
+        outils_menu.add_command(label="Logger", command=self._open_logger)
+        menubar.add_cascade(label="Outils", menu=outils_menu)
+        self.config(menu=menubar)
+
+    def _open_logger(self):
+        # Prevent opening multiple logger windows
+        if getattr(self, "_logger_window", None) is not None:
+            try:
+                self._logger_window.lift()
+            except Exception:
+                pass
+            return
+
+        win = tk.Toplevel(self)
+        win.title("Logger CAN")
+        win.geometry("700x300")
+        self._logger_window = win
+
+        frame = tk.Frame(win)
+        frame.pack(fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side="right", fill="y")
+
+        text = tk.Text(frame, wrap="none", yscrollcommand=scrollbar.set, state="disabled", bg="#0b0b0b", fg="#e8eef8")
+        text.pack(fill="both", expand=True)
+        scrollbar.config(command=text.yview)
+
+        q: "queue.Queue[str]" = queue.Queue()
+
+        class GuiLogHandler(logging.Handler):
+            def __init__(self, q):
+                super().__init__()
+                self._q = q
+
+            def emit(self, record):
+                try:
+                    msg = self.format(record)
+                except Exception:
+                    msg = str(record)
+                try:
+                    self._q.put_nowait(msg)
+                except Exception:
+                    pass
+
+        handler = GuiLogHandler(q)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        log = logging.getLogger("canopen_client")
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
+
+        self._log_queue = q
+        self._log_handler = handler
+        self._log_logger = log
+        self._log_widget = text
+
+        def poll():
+            try:
+                while True:
+                    line = self._log_queue.get_nowait()
+                    try:
+                        text.config(state="normal")
+                        text.insert("end", line + "\n")
+                        text.see("end")
+                        text.config(state="disabled")
+                    except Exception:
+                        pass
+            except queue.Empty:
+                pass
+            self._logger_window_after = win.after(100, poll)
+
+        def on_close():
+            try:
+                win.after_cancel(self._logger_window_after)
+            except Exception:
+                pass
+            try:
+                self._log_logger.removeHandler(self._log_handler)
+            except Exception:
+                pass
+            self._logger_window = None
+            self._log_queue = None
+            self._log_handler = None
+            self._log_logger = None
+            self._log_widget = None
+            win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", on_close)
+        poll()
+
+    def _show_about(self):
+        info = (
+            "Configurateur Baumer\n"
+            "Version 1.1\n"
+            "Designed by BE Elec\n"
+            "Developpeur Yassine A"
+        )
+        messagebox.showinfo("About", info)
 
     def _build_divider(self, parent, pady=(12, 12)):
         tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", pady=pady)
