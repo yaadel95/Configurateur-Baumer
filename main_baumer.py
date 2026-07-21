@@ -353,6 +353,13 @@ class StatChip(tk.Frame):
 class BaumerConfigApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        if Image is not None and ImageTk is not None:
+            try:
+                icon_image = ImageTk.PhotoImage(Image.open("baumer.webp"))
+                self.iconphoto(False, icon_image)
+                self._icon_image = icon_image
+            except Exception:
+                pass
         self.title("Configurateur Baumer")
         self.configure(bg=APP_BG)
         self.geometry("700x840")
@@ -390,13 +397,12 @@ class BaumerConfigApp(tk.Tk):
 
     def _build_menu(self):
         menubar = tk.Menu(self)
-        aide_menu = tk.Menu(menubar, tearoff=0)
-        aide_menu.add_command(label="About", command=self._show_about)
-        menubar.add_cascade(label="Aide", menu=aide_menu)
-        # Outils -> Logger
         outils_menu = tk.Menu(menubar, tearoff=0)
         outils_menu.add_command(label="Logger", command=self._open_logger)
         menubar.add_cascade(label="Outils", menu=outils_menu)
+        aide_menu = tk.Menu(menubar, tearoff=0)
+        aide_menu.add_command(label="About", command=self._show_about)
+        menubar.add_cascade(label="Aide", menu=aide_menu)
         self.config(menu=menubar)
 
     def _open_logger(self):
@@ -489,8 +495,8 @@ class BaumerConfigApp(tk.Tk):
         info = (
             "Configurateur Baumer\n"
             "Version 1.1\n"
-            "Designed by BE Elec\n"
-            "Developpeur Yassine A"
+            "Designed by BE Elec Preciculture\n"
+            "Développeur Yassine A"
         )
         messagebox.showinfo("About", info)
 
